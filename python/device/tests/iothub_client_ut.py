@@ -510,7 +510,8 @@ class TestClassDefinitions(unittest.TestCase):
         # set_option
         timeout = 241000
         with self.assertRaises(AttributeError):
-            client.SetOption()
+		    client.set_option(1)
+            #client.SetOption()
         with self.assertRaises(Exception):
             client.set_option(1)
         with self.assertRaises(Exception):
