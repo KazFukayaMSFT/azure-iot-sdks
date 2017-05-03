@@ -27,24 +27,16 @@ call windows_slow.cmd
 if errorlevel 1 goto :eof
 cd %build-root%\build\release
 
-rem -----------------------------------------------------------------------------
-rem -- Release mbed code
-rem -----------------------------------------------------------------------------
-if not defined nuget_feed (
-	call release_mbed.cmd
-) else (
-	echo "Skipping releasing MBED (for dry run)."
-)
 
 rem -----------------------------------------------------------------------------
 rem -- Publish C nuget packages
 rem -----------------------------------------------------------------------------
 if not defined nuget_feed (
 	call release_c_nuget.cmd
-	if %errorlevel% neq 0 exit /b %errorlevel%
+	if !ERRORLEVEL! neq 0 exit /b !ERRORLEVEL!
 ) else (
 	call release_c_nuget.cmd %nuget_feed%
-	if %errorlevel% neq 0 exit /b %errorlevel%
+	if !ERRORLEVEL! neq 0 exit /b !ERRORLEVEL!
 )
 
 
@@ -53,10 +45,10 @@ rem -- Publish .NET nuget packages
 rem -----------------------------------------------------------------------------
 if not defined nuget_feed (
 	call release_csharp_nuget.cmd
-	if %errorlevel% neq 0 exit /b %errorlevel%
+	if !ERRORLEVEL! neq 0 exit /b !ERRORLEVEL!
 ) else (
 	call release_csharp_nuget.cmd %nuget_feed%
-	if %errorlevel% neq 0 exit /b %errorlevel%
+	if !ERRORLEVEL! neq 0 exit /b !ERRORLEVEL!
 )
 
 rem -----------------------------------------------------------------------------

@@ -6,15 +6,19 @@
 var errors = require('azure-iot-common').errors;
 var results = require('azure-iot-common').results;
 var EventEmitter = require('events').EventEmitter;
+var util = require('util');
 var AmqpReceiver = require('azure-iot-amqp-base').AmqpReceiver;
 
 function SimulatedAmqp() {
+  EventEmitter.call(this);
   this._config = {
     sharedAccessSignature: 'ok'
   };
   this._receiver = new AmqpReceiver(new EventEmitter());
   this.FeedbackReceiver = AmqpReceiver;
 }
+
+util.inherits(SimulatedAmqp, EventEmitter);
 
 SimulatedAmqp.prototype.connect = function connect(done) {
   if (!!done) done();
@@ -43,7 +47,16 @@ SimulatedAmqp.prototype.send = function send(deviceId, message, done) {
   }
 };
 
-SimulatedAmqp.prototype.getReceiver = function (done) {
+SimulatedAmqp.prototype.getFeedbackReceiver = function (done) {
+  if (this._config.sharedAccessSignature === 'fail') {
+    done(new Error('error'));
+  }
+  else {
+    done(null, this._receiver);
+  }
+};
+
+SimulatedAmqp.prototype.getFileNotificationReceiver = function (done) {
   if (this._config.sharedAccessSignature === 'fail') {
     done(new Error('error'));
   }

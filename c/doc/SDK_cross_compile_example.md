@@ -14,9 +14,10 @@ This document presents an example of how to cross compile the Azure IoT Hub SDK 
 ### Version Information
 
 The host machine is running Debian GNU/Linux 8 (jessie) amd64
+
 The target machine is running Raspbian GNU/Linux 8 (jessie)
 
-Note this document assumes that you are using an amd64 build of Debian on the host and will use the 64-bit version of the Raspbian toolchain. You will need to select a different target toolchain if your host is not running a 64-bit Linux operating system.
+__Note:__ This example was built and tested on an __amd64__ build of Debian on the host and will use the __64-bit version__ of the Raspbian toolchain. You will need to select a different target toolchain if your host is not running a 64-bit Linux operating system.
 
 Though it may be possible to use a host machine running a variant of Windows this would likely be very complex to set up and thus is not addressed in this document.
 
@@ -33,7 +34,7 @@ git clone --recursive https://github.com/Azure/azure-iot-sdks.git
 ```
 Further information regarding this step, which also includes important other set up requirements, can be found at <https://github.com/Azure/azure-iot-sdks/blob/master/c/doc/devbox_setup.md>. This step is only included in this document to establish the directory structure used for the rest of the example.
 
-You might consider building the SDK for your local platform at this point simply to ensure you have all the required components.
+You might consider building the SDK for your local platform at this point simply to ensure you have all the required components. At the very least, you must ensure that the SDK's prerequisite libraries are installed on your Raspberry Pi. You can achieve this by running the script _setup.sh_ found in _azure-iot-sdks/c/build\_all/linux_.
 
 In order to cross compile for a different target the first requirement is to set up an environment containing the required toolchain, system libraries and system headers that may be required to build the code. In the instance of the Raspberry Pi this is simplified by the existence of a GitHub project that has much of that work already done for us. Change to your home directory, create a new directory for the Raspberry Pi Tools and clone the project at https://github.com/raspberrypi/tools into that directory. For example:
 ```
@@ -46,7 +47,7 @@ Unfortunately, this does not give us all the files that are required to build th
 ```
 cd ~/RPiTools/tools/arm-bcm2708/\
 gcc-linaro-arm-linux-gnueabihf-raspbian-x64/arm-linux-gnueabihf
-rsync -rl --safe-links pi@&lt;*your Pi identifier*&gt;:/{lib,usr} .
+rsync -rl --safe-links pi@<your Pi identifier>:/{lib,usr} .
 ```
 In the above command replace &lt;*your Pi identifier*&gt; with the IP address of your Raspberry Pi. If you no longer have a user identity on your Raspberry Pi called pi, then you will need to substitute an existing user identity.
 
@@ -92,13 +93,22 @@ and save the toolchain file. Your cross compilation environment is now complete.
 The final step in the process is to run the actual build. For this you will need to be in the Linux build directory as shown above. Enter the following commands
 ```
 cd ~/Source/azure-iot-sdks/c/build_all/linux
-./build.sh --toolchain-file toolchain-rpi.cmake --skip-e2e-tests \
---skip-unittests --no-amqp --no-mqtt -cl -D__STDC_NO_ATOMICS__ \
--cl --sysroot=$RPI_ROOT
+./build.sh --toolchain-file toolchain-rpi.cmake --skip-unittests -cl --sysroot=$RPI_ROOT
 ```
-This will tell cmake to build the SDK using the toolchain file toolchain-rpi.cmake, skip running all tests which is important since the executables will (probably) not run successfully on the host anyway, and exclude building the amqp and mqtt transports. The define *\_\_STDC\_NO\_ATOMICS\_\_* is required because this version of the Raspberry Pi compiler does not support *atomic\_fetch\_add* and *atomic\_fetch\_sub* so we need to tell it to use the GNU equivalents. Finally, and absolutely critical is the use of the *--sysroot* option. Without this the compiler will fail to find required headers and libraries.
+This will tell cmake to build the SDK using the toolchain file toolchain-rpi.cmake and skip running all tests which is important since the executables will (probably) not run successfully on the host anyway. Finally, and absolutely critical is the use of the *--sysroot* option. Without this the compiler will fail to find required headers and libraries.
 
-Note that if you need to add additional compiler flags to the build you can do so by specifying the -cl option on the build line. For example, one can use *-cl -v* or -*cl Wl,-v*.
+### Specifying Additional Build Flags
+
+If you need to provide additional build flags for your cross compile to function you can add further _-cl_ parameters to the build script's command line. For example, adding _-cl -v_ will turn on the verbose output from the compile and link process or to pass options only to the linker for example to pass -v to the linker you can use _-cl Wl,-v_.
+
+See this page for a summary of available gcc flags: https://gcc.gnu.org/onlinedocs/gcc/Option-Summary.html.
+
+### Notes
+These instructions have been tested on both the Raspberry Pi 2 and 3.
+
+### Known Issues and Circumventions
+
+If you encounter the error _error adding symbols: DSO missing from command line_ try adding a reference to libdl with  _-cl -ldl_ added to your build script command line.
 
 ## Summary
 

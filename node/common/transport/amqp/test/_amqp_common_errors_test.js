@@ -30,7 +30,7 @@ describe('translateError', function() {
       };
 
       var fake_error = new AMQPError();
-      fake_error.condition = { contents: testParams.errorDescription };
+      fake_error.condition = testParams.errorDescription;
 
       /*Tests_SRS_NODE_DEVICE_AMQP_ERRORS_16_010: [ `translateError` shall accept 2 argument:
       *- A custom error message to give context to the user.
@@ -45,6 +45,19 @@ describe('translateError', function() {
       */
       assert.equal(err.message, 'Error: ' + testParams.errorMessage);
       assert.equal(err.amqpError, fake_error);
+    });
+
+    it('returns a generic error object if the error type is unknown', function(){
+      var error = new Error('unknown reason');
+      var message = 'unknown error type';
+      var err = translateError(message, error);
+      
+      /*Tests_SRS_NODE_DEVICE_AMQP_ERRORS_16_001: [Any error object returned by `translateError` shall inherit from the generic `Error` Javascript object and have 2 properties:
+      *- `amqpError` shall contain the error object returned by the AMQP layer.
+      *- `message` shall contain a human-readable error message]
+      */
+      assert.equal(err.message, message);
+      assert.equal(err.amqpError, error);
     });
   });
 });

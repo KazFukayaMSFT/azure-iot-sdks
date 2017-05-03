@@ -23,11 +23,11 @@ describe('Client', function () {
   describe('#fromConnectionString', function () {
     var connStr = 'HostName=a.b.c;SharedAccessKeyName=name;SharedAccessKey=key';
 
-    /*Tests_SRS_NODE_IOTHUB_CLIENT_05_002: [The fromConnectionString method shall throw ReferenceError if the value argument is falsy.]*/
+    /*Tests_SRS_NODE_IOTHUB_CLIENT_05_002: [The fromConnectionString method shall throw ReferenceError if the connStr argument is falsy.]*/
     it('throws when value is falsy', function () {
       assert.throws(function () {
         return Client.fromConnectionString();
-      }, ReferenceError, 'value is \'undefined\'');
+      }, ReferenceError, 'connStr is \'undefined\'');
     });
 
     /*Tests_SRS_NODE_IOTHUB_CLIENT_05_003: [Otherwise, it shall derive and transform the needed parts from the connection string in order to create a new instance of the default transport (azure-iothub.Transport).]*/
@@ -46,11 +46,11 @@ describe('Client', function () {
   describe('#fromSharedAccessSignature', function () {
     var token = 'SharedAccessSignature sr=hubName.azure-devices.net&sig=signature&skn=keyname&se=expiry';
 
-    /*Tests_SRS_NODE_IOTHUB_CLIENT_05_005: [The fromSharedAccessSignature method shall throw ReferenceError if the value argument is falsy.]*/
+    /*Tests_SRS_NODE_IOTHUB_CLIENT_05_005: [The fromSharedAccessSignature method shall throw ReferenceError if the sharedAccessSignature argument is falsy.]*/
     it('throws when value is falsy', function () {
       assert.throws(function () {
         return Client.fromSharedAccessSignature();
-      }, ReferenceError, 'value is \'undefined\'');
+      }, ReferenceError, 'sharedAccessSignature is \'undefined\'');
     });
 
     it('correctly populates the config structure', function() {
@@ -101,12 +101,47 @@ describe('Client', function () {
       }, ReferenceError);
     });
   });
+
+  describe('#open', function() {
+    /*Tests_SRS_NODE_IOTHUB_CLIENT_16_004: [The `disconnect` event shall be emitted when the client is disconnected from the server.]*/
+    /*Tests_SRS_NODE_IOTHUB_CLIENT_16_002: [If the transport successfully establishes a connection the `open` method shall subscribe to the `disconnect` event of the transport.]*/
+    it('subscribes to the \'disconnect\' event once connected', function(done) {
+      var simulatedAmqp = new SimulatedAmqp();
+      var client = new Client(simulatedAmqp);
+      client.open(function() {
+        client.on('disconnect', function() {
+          done();
+        });
+
+        simulatedAmqp.emit('disconnect');
+      });
+    });
+  });
+
+  describe('#close', function() {
+    /*Tests_SRS_NODE_IOTHUB_CLIENT_16_003: [The `close` method shall remove the listener that has been attached to the transport `disconnect` event.]*/
+    it('unsubscribes for the \'disconnect\' event when disconnecting', function(done) {
+      var simulatedAmqp = new SimulatedAmqp();
+      var client = new Client(simulatedAmqp);
+      var disconnectReceived = false;
+      client.open(function() {
+        client.on('disconnect', function() {
+          disconnectReceived = true;
+        });
+        client.close(function() {
+          simulatedAmqp.emit('disconnect');
+          assert.isFalse(disconnectReceived);
+          done();
+        });
+      });
+    });
+  });
 });
 
 describe('Over simulated AMQP', function () {
   var opts = {
     transport: function () { return new SimulatedAmqp(); },
-    connectionString: null,
+    connectionString: process.env.IOTHUB_CONNECTION_STRING,
     id: 'id'
   };
   transportSpecificTests(opts);

@@ -6,10 +6,11 @@
 
 import sys
 import unittest
+import iothub_client_mock
 from iothub_client_mock import *
 
 # connnection strings for mock testing
-connectionString = "HostName=mockhub.azure-devices.net;DeviceId=mockdevice;SharedAccessKey=Sj3IdHgrRmvWFzIwCMu0MKrSChIg8d244DOeFDAO7+k="
+connectionString = "HostName=mockhub.mock-devices.net;DeviceId=mockdevice;SharedAccessKey=1234567890123456789012345678901234567890ABCD"
 
 callback_key = ""
 callback_value = ""
@@ -39,6 +40,8 @@ def receive_message_callback(message, counter):
 def send_confirmation_callback(message, result, userContext):
     return
 
+def blob_upload_callback(result, userContext):
+    return
 
 class TestExceptionDefinitions(unittest.TestCase):
 
@@ -86,6 +89,46 @@ class TestExceptionDefinitions(unittest.TestCase):
             raise IoTHubClientError()
         with self.assertRaises(IoTHubClientError):
             raise IoTHubClientError()
+
+    def test_IoTHubMapErrorArg(self):
+        with self.assertRaises(Exception):
+            error = IoTHubMapErrorArg()
+        with self.assertRaises(Exception):
+            error = IoTHubMapErrorArg(__name__)
+        with self.assertRaises(Exception):
+            error = IoTHubMapErrorArg(__name__, "function")
+        with self.assertRaises(Exception):
+            error = IoTHubMapErrorArg(IoTHubMapResult.ERROR)
+        error = IoTHubMapErrorArg("function", IoTHubMapResult.ERROR)
+        with self.assertRaises(TypeError):
+            raise IoTHubMapErrorArg("function", IoTHubMapResult.ERROR)
+
+    def test_IoTHubMessageErrorArg(self):
+        with self.assertRaises(Exception):
+            error = IoTHubMessageErrorArg()
+        with self.assertRaises(Exception):
+            error = IoTHubMessageErrorArg(__name__)
+        with self.assertRaises(Exception):
+            error = IoTHubMessageErrorArg(__name__, "function")
+        with self.assertRaises(Exception):
+            error = IoTHubMessageErrorArg(IoTHubMapResult.ERROR)
+        error = IoTHubMessageErrorArg("function", IoTHubMessageResult.ERROR)
+        with self.assertRaises(TypeError):
+            raise IoTHubMessageErrorArg("function", IoTHubMessageResult.ERROR)
+
+    def test_IoTHubClientErrorArg(self):
+        with self.assertRaises(Exception):
+            error = IoTHubClientErrorArg()
+        with self.assertRaises(Exception):
+            error = IoTHubClientErrorArg(__name__)
+        with self.assertRaises(Exception):
+            error = IoTHubClientErrorArg(__name__, "function")
+        with self.assertRaises(Exception):
+            error = IoTHubClientErrorArg(IoTHubMapResult.ERROR)
+        error = IoTHubClientErrorArg("function", IoTHubClientResult.ERROR)
+        with self.assertRaises(TypeError):
+            raise IoTHubClientErrorArg("function", IoTHubClientResult.ERROR)
+
 
 class TestEnumDefinitions(unittest.TestCase):
 
@@ -304,6 +347,12 @@ class TestClassDefinitions(unittest.TestCase):
         self.assertEqual(callback_value, "value")
         callback_key = ""
         callback_value = ""
+        # check if second filter is refused
+        with self.assertRaises(Exception):
+            map2 = IoTHubMap(map_callback_reject)
+        # clear ok filter
+        map = IoTHubMap()
+        # setup reject filter
         map = IoTHubMap(map_callback_reject)
         with self.assertRaises(IoTHubMapError):
             map.add("key", "value")
@@ -521,8 +570,28 @@ class TestClassDefinitions(unittest.TestCase):
         with self.assertRaises(Exception):
             client.set_option(timeout)
         with self.assertRaises(TypeError):
-            client.set_option("timeout", "241000")
+            client.set_option("timeout", bytearray("241000"))
+        result = client.set_option("timeout", "241000")
+        self.assertIsNone(result)
         result = client.set_option("timeout", timeout)
+        self.assertIsNone(result)
+        # upload_blob_async
+        destinationFileName = "fname"
+        source = "src"
+        size = 10
+        with self.assertRaises(AttributeError):
+            client.UploadToBlobAsync()
+        with self.assertRaises(Exception):
+            client.upload_blob_async(1)
+        with self.assertRaises(Exception):
+            client.upload_blob_async(blob_upload_callback)
+        with self.assertRaises(Exception):
+            client.upload_blob_async(destinationFileName, blob_upload_callback)
+        with self.assertRaises(Exception):
+            client.upload_blob_async(destinationFileName, source, blob_upload_callback)
+        with self.assertRaises(Exception):
+            client.upload_blob_async(destinationFileName, source, size, send_confirmation_callback)
+        result = client.upload_blob_async(destinationFileName, source, size, send_confirmation_callback, None)
         self.assertIsNone(result)
 
 if __name__ == '__main__':

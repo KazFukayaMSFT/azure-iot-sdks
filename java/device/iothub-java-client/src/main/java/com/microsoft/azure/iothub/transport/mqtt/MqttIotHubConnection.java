@@ -7,7 +7,7 @@ import com.microsoft.azure.iothub.DeviceClientConfig;
 import com.microsoft.azure.iothub.IotHubStatusCode;
 import com.microsoft.azure.iothub.Message;
 import com.microsoft.azure.iothub.auth.IotHubSasToken;
-import com.microsoft.azure.iothub.net.IotHubUri;
+import com.microsoft.azure.iothub.transport.State;
 import com.microsoft.azure.iothub.transport.TransportUtils;
 import org.eclipse.paho.client.mqttv3.*;
 import org.eclipse.paho.client.mqttv3.persist.MemoryPersistence;
@@ -24,13 +24,8 @@ public class MqttIotHubConnection implements MqttCallback
 
     private MqttAsyncClient asyncClient;
 
-    public enum ConnectionState
-    {
-        OPEN, CLOSED
-    }
-
     protected final DeviceClientConfig config;
-    protected ConnectionState state = ConnectionState.CLOSED;
+    protected State state = State.CLOSED;
 
     // paho mqtt only supports 10 messages in flight at the same time
     private static final int maxInFlightCount = 10;
@@ -41,8 +36,6 @@ public class MqttIotHubConnection implements MqttCallback
     private String subscribeTopic;
     private MqttConnectOptions connectionOptions = new MqttConnectOptions();
     private String iotHubUserName;
-
-    private int inFlightCount = 0;
 
     //mqtt connection options
     private static final int keepAliveInterval = 20;
@@ -66,10 +59,11 @@ public class MqttIotHubConnection implements MqttCallback
         {
             // Codes_SRS_MQTTIOTHUBCONNECTION_15_003: [The constructor shall throw a new IllegalArgumentException
             // if any of the parameters of the configuration is null or empty.]
-            if(config == null){
+            if (config == null)
+            {
                 throw new IllegalArgumentException("The DeviceClientConfig cannot be null.");
             }
-            if(config.getIotHubHostname() == null || config.getIotHubHostname().length() == 0)
+            if (config.getIotHubHostname() == null || config.getIotHubHostname().length() == 0)
             {
                 throw new IllegalArgumentException("hostName cannot be null or empty.");
             }
@@ -77,13 +71,15 @@ public class MqttIotHubConnection implements MqttCallback
             {
                 throw new IllegalArgumentException("deviceID cannot be null or empty.");
             }
-            if(config.getIotHubName() == null || config.getIotHubName().length() == 0)
+            if (config.getIotHubName() == null || config.getIotHubName().length() == 0)
             {
                 throw new IllegalArgumentException("hubName cannot be null or empty.");
             }
-            if(config.getDeviceKey() == null || config.getDeviceKey().length() == 0)
+            if (config.getDeviceKey() == null || config.getDeviceKey().length() == 0)
             {
-                throw new IllegalArgumentException("deviceKey cannot be null or empty.");
+                if(config.getSharedAccessToken() == null || config.getSharedAccessToken().length() == 0)
+
+                    throw new IllegalArgumentException("Both deviceKey and shared access signature cannot be null or empty.");
             }
 
             // Codes_SRS_MQTTIOTHUBCONNECTION_15_001: [The constructor shall save the configuration.]
@@ -109,7 +105,7 @@ public class MqttIotHubConnection implements MqttCallback
         {
             //Codes_SRS_MQTTIOTHUBCONNECTION_15_006: [If the MQTT connection is already open,
             // the function shall do nothing.]
-            if (this.state == ConnectionState.OPEN)
+            if (this.state == State.OPEN)
             {
                 return;
             }
@@ -118,9 +114,8 @@ public class MqttIotHubConnection implements MqttCallback
             // with an IoT Hub using the provided host name, user name, device ID, and sas token.]
             try
             {
-                IotHubSasToken sasToken = new IotHubSasToken(IotHubUri.getResourceUri(this.config.getIotHubHostname(), this.config.getDeviceId()),
-                        this.config.getDeviceKey(),
-                        System.currentTimeMillis() / 1000l + this.config.getTokenValidSecs() + 1l);
+                IotHubSasToken sasToken = new IotHubSasToken(this.config, System.currentTimeMillis() / 1000l +
+                        this.config.getTokenValidSecs() + 1l);
 
 
                 this.asyncClient = new MqttAsyncClient(sslPrefix + this.config.getIotHubHostname() + sslPortSuffix,
@@ -135,7 +130,7 @@ public class MqttIotHubConnection implements MqttCallback
 
                 this.subscribe();
 
-                this.state = ConnectionState.OPEN;
+                this.state = State.OPEN;
             }
             // Codes_SRS_MQTTIOTHUBCONNECTION_15_005: [If an MQTT connection is unable to be established
             // for any reason, the function shall throw an IOException.]
@@ -156,7 +151,8 @@ public class MqttIotHubConnection implements MqttCallback
         synchronized (MQTT_CONNECTION_LOCK)
         {
             // Codes_SRS_MQTTIOTHUBCONNECTION_15_007: [If the MQTT session is closed, the function shall do nothing.]
-            if (this.state == ConnectionState.CLOSED) {
+            if (this.state == State.CLOSED)
+            {
                 return;
             }
 
@@ -165,13 +161,12 @@ public class MqttIotHubConnection implements MqttCallback
             {
                 IMqttToken disconnectToken = this.asyncClient.disconnect();
                 disconnectToken.waitForCompletion();
-            }
-            catch (MqttException e)
+            } catch (MqttException e)
             {
                 //do nothing, since connection is closed anyway.
             }
 
-            this.state = ConnectionState.CLOSED;
+            this.state = State.CLOSED;
             this.asyncClient = null;
         }
     }
@@ -198,7 +193,7 @@ public class MqttIotHubConnection implements MqttCallback
 
             // Codes_SRS_MQTTIOTHUBCONNECTION_15_013: [If the MQTT connection is closed,
             // the function shall throw an IllegalStateException.]
-            if (this.state == ConnectionState.CLOSED)
+            if (this.state == State.CLOSED)
             {
                 throw new IllegalStateException("Cannot send event using a closed MQTT connection");
             }
@@ -212,8 +207,7 @@ public class MqttIotHubConnection implements MqttCallback
 
             try
             {
-                inFlightCount++;
-                while (inFlightCount >= maxInFlightCount)
+                while (asyncClient.getPendingDeliveryTokens().length >= maxInFlightCount)
                 {
                     Thread.sleep(10);
                 }
@@ -226,7 +220,7 @@ public class MqttIotHubConnection implements MqttCallback
             }
             // Codes_SRS_MQTTIOTHUBCONNECTION_15_012: [If the message was not successfully
             // received by the service, the function shall return status code ERROR.]
-            catch(Exception e)
+            catch (Exception e)
             {
                 result = IotHubStatusCode.ERROR;
             }
@@ -246,7 +240,7 @@ public class MqttIotHubConnection implements MqttCallback
     {
         // Codes_SRS_MQTTIOTHUBCONNECTION_15_015: [If the MQTT connection is closed,
         // the function shall throw an IllegalStateException.]
-        if (this.state == ConnectionState.CLOSED)
+        if (this.state == State.CLOSED)
         {
             throw new IllegalStateException("The MQTT connection is currently closed. Call open() before attempting" +
                     "to receive a message.");
@@ -282,15 +276,14 @@ public class MqttIotHubConnection implements MqttCallback
 
             // Codes_SRS_MQTTIOTHUBCONNECTION_15_016: [The function shall attempt to reconnect to the IoTHub
             // in a loop with an exponential backoff until it succeeds]
-            this.state = ConnectionState.CLOSED;
+            this.state = State.CLOSED;
             int currentReconnectionAttempt = 0;
-            while (this.state == ConnectionState.CLOSED)
+            while (this.state == State.CLOSED)
             {
                 try
                 {
                     this.open();
-                }
-                catch (IOException e)
+                } catch (IOException e)
                 {
                     try
                     {
@@ -298,9 +291,8 @@ public class MqttIotHubConnection implements MqttCallback
 
                         // Codes_SRS_MQTTIOTHUBCONNECTION_15_018: [The maximum wait interval
                         // until a reconnect is attempted shall be 60 seconds.]
-                        Thread.sleep(generateSleepInterval(currentReconnectionAttempt) * 1000);
-                    }
-                    catch (InterruptedException exception)
+                        Thread.sleep(TransportUtils.generateSleepInterval(currentReconnectionAttempt) * 1000);
+                    } catch (InterruptedException exception)
                     {
                         // do nothing, reconnection attempts will continue
                     }
@@ -324,7 +316,6 @@ public class MqttIotHubConnection implements MqttCallback
     @Override
     public void deliveryComplete(IMqttDeliveryToken iMqttDeliveryToken)
     {
-        inFlightCount--;
     }
 
     private void connect(MqttConnectOptions connectionOptions) throws MqttException
@@ -355,28 +346,5 @@ public class MqttIotHubConnection implements MqttCallback
         this.connectionOptions.setMqttVersion(mqttVersion);
         this.connectionOptions.setUserName(userName);
         this.connectionOptions.setPassword(userPassword.toCharArray());
-    }
-
-    private static byte[] sleepIntervals = {1, 2, 4, 8, 16, 32, 60};
-    /** Generates a reconnection time with an exponential backoff
-     * and a maximum value of 60 seconds.
-     *
-     * @param currentAttempt the number of attempts
-     * @return the sleep interval until the next attempt.
-     */
-    private byte generateSleepInterval(int currentAttempt)
-    {
-        if (currentAttempt > 7)
-        {
-            return sleepIntervals[6];
-        }
-        else if (currentAttempt > 0)
-        {
-            return sleepIntervals[currentAttempt - 1];
-        }
-        else
-        {
-            return 0;
-        }
     }
 }

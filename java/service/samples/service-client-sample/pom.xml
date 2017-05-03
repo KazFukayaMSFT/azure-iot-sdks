@@ -2,7 +2,7 @@
     <modelVersion>4.0.0</modelVersion>
     <groupId>com.microsoft.azure.iothub.service.sdk</groupId>
     <artifactId>ServiceClientSample</artifactId>
-    <version>1.0.4</version>
+    <version>1.0.8</version>
     <name>Service Client Sample</name>
     <developers>
         <developer>
@@ -28,13 +28,22 @@
                     </archive>
                 </configuration>
             </plugin>
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-compiler-plugin</artifactId>
+                <version>3.3</version>
+                <configuration>
+                    <source>1.5</source>
+                    <target>1.5</target>
+                </configuration>
+            </plugin>
         </plugins>
     </build>
     <dependencies>
         <dependency>
             <groupId>com.microsoft.azure.iothub.service.sdk</groupId>
             <artifactId>iothub-service-sdk</artifactId>
-            <version>1.0.4</version>
+            <version>1.0.8</version>
             <type>jar</type>
         </dependency>
     </dependencies>

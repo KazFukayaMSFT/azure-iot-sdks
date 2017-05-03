@@ -4,9 +4,11 @@
 namespace Microsoft.Azure.Devices.Client.Transport.Mqtt
 {
     using System;
+    using System.Net.Security;
+    using System.Security.Cryptography.X509Certificates;
     using DotNetty.Codecs.Mqtt.Packets;
 
-    class MqttTransportSettings : ITransportSettings
+    public class MqttTransportSettings : ITransportSettings
     {
         readonly TransportType transportType;
         const bool DefaultCleanSession = false;
@@ -14,6 +16,7 @@ namespace Microsoft.Azure.Devices.Client.Transport.Mqtt
         const bool DefaultHasWill = false;
         const bool DefaultMaxOutboundRetransmissionEnforced = false;
         const int DefaultKeepAliveInSeconds = 300;
+        const int DefaultReceiveTimeoutInSeconds = 60;
         const int DefaultMaxPendingInboundMessages = 50;
         const QualityOfService DefaultPublishToServerQoS = QualityOfService.AtLeastOnce;
         const QualityOfService DefaultReceivingQoS = QualityOfService.AtLeastOnce;
@@ -38,6 +41,7 @@ namespace Microsoft.Azure.Devices.Client.Transport.Mqtt
             this.QoSPropertyName = "mqtt-qos";
             this.RetainPropertyName = "mqtt-retain";
             this.WillMessage = null;
+            this.DefaultReceiveTimeout = TimeSpan.FromSeconds(DefaultReceiveTimeoutInSeconds);
         }
 
         public bool DeviceReceiveAckCanTimeout { get; set; }
@@ -72,5 +76,11 @@ namespace Microsoft.Azure.Devices.Client.Transport.Mqtt
         {
             return this.transportType;
         }
+
+        public TimeSpan DefaultReceiveTimeout { get; set; }
+
+        public RemoteCertificateValidationCallback RemoteCertificateValidationCallback { get; set; }
+
+        public X509Certificate ClientCertificate { get; set; }
     }
 }

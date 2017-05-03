@@ -77,23 +77,44 @@ AmqpReceiver.prototype._onAmqpMessage = function (amqpMessage) {
     msg.data = amqpMessage.body;
   }
 
+  /*Codes_SRS_NODE_IOTHUB_AMQPRECEIVER_13_001: [ If the AMQP message has values in it's applicationProperties property then those shall be added to the properties property of the newly created message object. ]*/
+  if(amqpMessage.applicationProperties) {
+    var appProps = amqpMessage.applicationProperties;
+    for (var key in appProps) {
+      if (appProps.hasOwnProperty(key)) {
+        msg.properties.add(key, appProps[key], '');
+      }
+    }
+  }
+
   msg.transportObj = amqpMessage;
 
   this.emit('message', msg);
 };
 
 AmqpReceiver.prototype._setupAmqpReceiverListeners = function () {
-  this._amqpReceiver.on('errorReceived', this._onAmqpErrorReceived.bind(this));
-  this._amqpReceiver.on('message', this._onAmqpMessage.bind(this));
+  this._listeners = [
+    { eventName: 'errorReceived', listener: this._onAmqpErrorReceived.bind(this) },
+    { eventName: 'message', listener: this._onAmqpMessage.bind(this) }
+  ];
+  for(var i = 0; i < this._listeners.length; ++i) {
+    var listener = this._listeners[i];
+    this._amqpReceiver.on(listener.eventName, listener.listener);
+  }
+
   this._listenersInitialized = true;
 };
 
 AmqpReceiver.prototype._removeAmqpReceiverListeners = function () {
-  this._amqpReceiver.removeListener('errorReceived', this._onAmqpErrorReceived.bind(this));
-  this._amqpReceiver.removeListener('message', this._onAmqpMessage.bind(this));
-  this._listenersInitialized = false;
-};
+  if(this._listenersInitialized === true) {
+    for(var i = 0; i < this._listeners.length; ++i) {
+      var listener = this._listeners[i];
+      this._amqpReceiver.removeListener(listener.eventName, listener.listener);
+    }
 
+    this._listenersInitialized = false;
+  }
+};
 
 /**
  * @method          module:azure-iot-amqp-base.AmqpReceiver#complete
@@ -127,7 +148,7 @@ AmqpReceiver.prototype.abandon = function (message, done) {
 /* Codes_SRS_NODE_IOTHUB_AMQPRECEIVER_16_010: [If the message object passed as an argument is falsy, a ReferenceError should be thrown]*/
 AmqpReceiver.prototype.reject = function (message, done) {
   if (!message) { throw new ReferenceError('Invalid message object.'); }
-  this._amqpReceiver.reject(message.transportObj, "Message rejected by the device");
+  this._amqpReceiver.reject(message.transportObj);
   if (done) done(null, new results.MessageRejected());
 };
 

@@ -18,6 +18,7 @@ namespace Microsoft.Azure.Devices.Client.Transport
     using Microsoft.Azure.Devices.Client.Extensions;
 #if !WINDOWS_UWP && !PCL
     using System.Net.Http.Formatting;
+    using System.Security.Cryptography.X509Certificates;
 #endif
 
     sealed class HttpClientHelper : IHttpClientHelper
@@ -25,6 +26,7 @@ namespace Microsoft.Azure.Devices.Client.Transport
         readonly Uri baseAddress;
         readonly IAuthorizationHeaderProvider authenticationHeaderProvider;
         readonly IReadOnlyDictionary<HttpStatusCode, Func<HttpResponseMessage, Task<Exception>>> defaultErrorMapping;
+        readonly bool usingX509ClientCert;
         HttpClient httpClientObj;
         bool isDisposed;
 
@@ -33,18 +35,35 @@ namespace Microsoft.Azure.Devices.Client.Transport
             IAuthorizationHeaderProvider authenticationHeaderProvider,
             IDictionary<HttpStatusCode, Func<HttpResponseMessage, Task<Exception>>> defaultErrorMapping,
             TimeSpan timeout,
-            Action<HttpClient> preRequestActionForAllRequests)
+            Action<HttpClient> preRequestActionForAllRequests
+#if !WINDOWS_UWP && !PCL
+            , X509Certificate2 clientCert
+#endif
+            )
         {
             this.baseAddress = baseAddress;
             this.authenticationHeaderProvider = authenticationHeaderProvider;
             this.defaultErrorMapping =
                 new ReadOnlyDictionary<HttpStatusCode, Func<HttpResponseMessage, Task<Exception>>>(defaultErrorMapping);
 
+#if !WINDOWS_UWP && !PCL
+            WebRequestHandler handler = null;
+            if (clientCert != null)
+            {
+                handler = new WebRequestHandler();
+                handler.ClientCertificates.Add(clientCert);
+                this.usingX509ClientCert = true;
+            }
+
+            this.httpClientObj = handler != null ? new HttpClient(handler) : new HttpClient();
+#else
             this.httpClientObj = new HttpClient();
+#endif
+
             this.httpClientObj.BaseAddress = this.baseAddress;
             this.httpClientObj.Timeout = timeout;
             this.httpClientObj.DefaultRequestHeaders.Accept.Add(new MediaTypeWithQualityHeaderValue(CommonConstants.MediaTypeForDeviceManagementApis));
-            this.httpClientObj.DefaultRequestHeaders.ExpectContinue = false; 
+            this.httpClientObj.DefaultRequestHeaders.ExpectContinue = false;
             if (preRequestActionForAllRequests != null)
             {
                 preRequestActionForAllRequests(this.httpClientObj);
@@ -265,6 +284,69 @@ namespace Microsoft.Azure.Devices.Client.Transport
                 cancellationToken);
         }
 
+        public async Task<T2> PostAsync<T1, T2>(
+             Uri requestUri,
+             T1 entity,
+             IDictionary<HttpStatusCode, Func<HttpResponseMessage, Task<Exception>>> errorMappingOverrides,
+             IDictionary<string, string> customHeaders,
+             CancellationToken cancellationToken)
+        {
+            T2 result = default(T2);
+            await this.PostAsyncHelper(
+                requestUri,
+                entity,
+                errorMappingOverrides,
+                customHeaders,
+                async (message, token) => result = await ReadResponseMessageAsync<T2>(message, token),
+                cancellationToken);
+
+            return result;
+        }
+
+        Task PostAsyncHelper<T1>(
+            Uri requestUri,
+            T1 entity,
+            IDictionary<HttpStatusCode, Func<HttpResponseMessage, Task<Exception>>> errorMappingOverrides,
+            IDictionary<string, string> customHeaders,
+            Func<HttpResponseMessage, CancellationToken, Task> processResponseMessageAsync,
+            CancellationToken cancellationToken)
+        {
+            return this.ExecuteAsync(
+                HttpMethod.Post,
+                new Uri(this.baseAddress, requestUri),
+                (requestMsg, token) =>
+                {
+                    AddCustomHeaders(requestMsg, customHeaders);
+                    if (entity != null)
+                    {
+                        if (typeof(T1) == typeof(byte[]))
+                        {
+                            requestMsg.Content = new ByteArrayContent((byte[])(object)entity);
+                        }
+                        else if (typeof(T1) == typeof(string))
+                        {
+                            // only used to send batched messages on Http runtime
+                            requestMsg.Content = new StringContent((string)(object)entity);
+                            requestMsg.Content.Headers.ContentType = new MediaTypeHeaderValue(CommonConstants.BatchedMessageContentType);
+                        }
+                        else
+                        {
+#if WINDOWS_UWP || PCL
+                            // System.Net.Http.Formatting does not exist in UWP. Need to find another way to create content
+                            throw new NotImplementedException();
+#else
+                            requestMsg.Content = new ObjectContent<T1>(entity, new JsonMediaTypeFormatter());
+#endif
+                        }
+                    }
+
+                    return Task.FromResult(0);
+                },
+                processResponseMessageAsync,
+                errorMappingOverrides,
+                cancellationToken);
+        }
+
         public Task DeleteAsync<T>(
             Uri requestUri,
             T entity,
@@ -318,7 +400,10 @@ namespace Microsoft.Azure.Devices.Client.Transport
 
             using (var msg = new HttpRequestMessage(httpMethod, requestUri))
             {
-                msg.Headers.Add(HttpRequestHeader.Authorization.ToString(), this.authenticationHeaderProvider.GetAuthorizationHeader());
+                if (!this.usingX509ClientCert)
+                {
+                    msg.Headers.Add(HttpRequestHeader.Authorization.ToString(), this.authenticationHeaderProvider.GetAuthorizationHeader());
+                }
 #if !WINDOWS_UWP && !PCL
                 msg.Headers.UserAgent.ParseAdd(Utils.GetClientVersion());
 #endif

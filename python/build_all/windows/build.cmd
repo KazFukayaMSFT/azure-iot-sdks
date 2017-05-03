@@ -36,8 +36,8 @@ call pyenv.bat
 goto :nuget
 
 :NeedPython
-@Echo Azure IoT SDK needs Python 2.7 from 
-@Echo https://www.python.org/download/releases/2.7/ 
+@Echo Azure IoT SDK needs Python from 
+@Echo https://www.python.org/downloads/
 exit /b 1
 
 :nuget
@@ -108,7 +108,7 @@ rem ----------------------------------------------------------------------------
 if %build-clean%==1 (
     call nuget restore %PYTHON_SOLUTION%
     call :clean-a-solution %PYTHON_SOLUTION%
-    if not %errorlevel%==0 exit /b %errorlevel%
+    if not !ERRORLEVEL!==0 exit /b !ERRORLEVEL!
 )
 
 rem -----------------------------------------------------------------------------
@@ -116,7 +116,7 @@ rem -- build solutions
 rem -----------------------------------------------------------------------------
 
 call :build-a-solution %PYTHON_SOLUTION%
-if not %errorlevel%==0 exit /b %errorlevel%
+if not !ERRORLEVEL!==0 exit /b !ERRORLEVEL!
 
 rem -----------------------------------------------------------------------------
 rem -- Copy Python extension to sample and test folder
@@ -125,10 +125,10 @@ rem ----------------------------------------------------------------------------
 @echo Python extension release folder: %PYTHON_SOLUTION_PATH%\%build-config%
 @echo Copy iothub_client.pyd to %build-root%\device\samples
 copy /Y %PYTHON_SOLUTION_PATH%\%build-config%\iothub_client.pyd  %build-root%\device\samples\ 
-if not %errorlevel%==0 exit /b %errorlevel%
+if not !ERRORLEVEL!==0 exit /b !ERRORLEVEL!
 @echo Copy iothub_client_mock.pyd to %build-root%\device\tests
 copy /Y %PYTHON_SOLUTION_PATH%\%build-config%\iothub_client_mock.pyd  %build-root%\device\tests\ 
-if not %errorlevel%==0 exit /b %errorlevel%
+if not !ERRORLEVEL!==0 exit /b !ERRORLEVEL!
 
 rem -----------------------------------------------------------------------------
 rem -- Python library unit test
@@ -137,6 +137,8 @@ rem ----------------------------------------------------------------------------
 if %run-ut%==1 (
     cd %build-root%\device\tests
     python iothub_client_ut.py
+    if ERRORLEVEL 1 exit /b 1
+    python iothub_client_map_test.py
     if ERRORLEVEL 1 exit /b 1
     echo Python unit test PASSED
 )
@@ -181,6 +183,6 @@ if "%~3" neq "" set build-config=%~3
 if "%~4" neq "" set build-platform=%~4
 
 msbuild /m %build-target% "/p:Configuration=%build-config%;Platform=%build-platform%" %2
-if not %errorlevel%==0 exit /b %errorlevel%
+if not !ERRORLEVEL!==0 exit /b !ERRORLEVEL!
 goto :eof
 

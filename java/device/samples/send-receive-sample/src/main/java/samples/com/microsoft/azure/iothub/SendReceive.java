@@ -112,7 +112,9 @@ public class SendReceive
      * HTTPS transport.
      *
      * @param args args[0] = IoT Hub connection string; args[1] = protocol (one
-     * of 'https', 'amqps', 'mqtt' or 'amqps_ws' , optional).
+     * of 'https', 'amqps', 'mqtt' or 'amqps_ws' , optional); args[3] = path to
+     * certificate to enable one-way authentication over ssl for amqps (optional,
+     * default shall be used if unspecified).
      */
     public static void main(String[] args)
             throws IOException, URISyntaxException
@@ -120,14 +122,16 @@ public class SendReceive
         System.out.println("Starting...");
         System.out.println("Beginning setup.");
 
-        if (args.length <= 1 || args.length >= 4)
+        String pathToCertificate = null;
+        if (args.length <= 1 || args.length >= 5)
         {
             System.out.format(
                     "Expected 2 or 3 arguments but received:\n%d. The program "
                             + "should be called with the: "
                             + "following args: \n"
                             + "[Device connection string] - String containing Hostname, Device Id & Device Key in one of the following formats: HostName=<iothub_host_name>;DeviceId=<device_id>;SharedAccessKey=<device_key>\n"
-                            + "[number of requests to send] (https | amqps | mqtt | amqps_ws).\n",
+                            + "[number of requests to send] (https | amqps | mqtt | amqps_ws).\n"
+                            + "path to certificate to enable one-way authentication over ssl for amqps. \n",
                     args.length);
             return;
         }
@@ -182,6 +186,15 @@ public class SendReceive
                         protocolStr);
                 return;
             }
+
+            if (args.length == 3)
+            {
+                pathToCertificate = null;
+            }
+            else
+            {
+                pathToCertificate = args[3];
+            }
         }
 
         System.out.println("Successfully read input parameters.");
@@ -189,6 +202,10 @@ public class SendReceive
                 protocol.name());
 
         DeviceClient client = new DeviceClient(connString, protocol);
+        if (pathToCertificate != null )
+        {
+            client.setOption("SetCertificatePath", pathToCertificate );
+        }
 
         System.out.println("Successfully created an IoT Hub client.");
 
@@ -215,28 +232,36 @@ public class SendReceive
 
         System.out.println("Sending the following event messages: ");
 
-        new Thread(() -> {
-            for (int i = 0; i < numRequests; ++i)
+        // Set your token expiry time limit here
+        long time = 2400;
+        client.setOption("SetSASTokenExpiryTime", time);
+
+        System.out.println("Updated token expiry time to " + time);
+
+
+        for (int i = 0; i < numRequests; ++i)
+        {
+            String msgStr = "Event Message " + Integer.toString(i);
+            try
             {
-                String msgStr = "Event Message " + Integer.toString(i);
-                try
-                {
-                    Message msg = new Message(msgStr);
-                    msg.setProperty("messageCount", Integer.toString(i));
-                    System.out.println(msgStr);
-                    EventCallback eventCallback = new EventCallback();
-                    client.sendEventAsync(msg, eventCallback, i);
-                }
-                catch (Exception e)
-                {
-                }
-                try {
-                    Thread.sleep(200);
-                } catch (InterruptedException e) {
-                    e.printStackTrace();
-                }
+                Message msg = new Message(msgStr);
+                msg.setProperty("messageCount", Integer.toString(i));
+                msg.setProperty("key1", "value1");
+                msg.setProperty("key2", "value2");
+                msg.setExpiryTime(5000);
+                System.out.println(msgStr);
+                EventCallback eventCallback = new EventCallback();
+                client.sendEventAsync(msg, eventCallback, i);
             }
-        }).start();
+            catch (Exception e)
+            {
+            }
+            try {
+                Thread.sleep(200);
+            } catch (InterruptedException e) {
+                e.printStackTrace();
+            }
+        }
 
         System.out.println("Press any key to exit...");
 

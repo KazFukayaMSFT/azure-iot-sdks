@@ -62,9 +62,21 @@ add_library(
 serializer ${serializer_c_files} ${serializer_h_files}
 )
 
-add_subdirectory(samples)
+if(WIN32)
+	if (NOT ${ARCHITECTURE} STREQUAL "ARM")
+		add_subdirectory(samples)
+	endif()
+else()
+	add_subdirectory(samples)
+endif()
 
 if(NOT IN_OPENWRT)
 # Disable tests and samples for OpenWRT
 add_subdirectory(tests)
 endif()
+
+if(WIN32)
+else()
+    install (TARGETS serializer DESTINATION lib)
+    install (FILES ${serializer_h_files} DESTINATION include/azureiot)
+endif (WIN32)

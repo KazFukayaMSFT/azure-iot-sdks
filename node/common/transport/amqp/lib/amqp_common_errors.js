@@ -13,8 +13,8 @@ var amqp10 = require('amqp10');
 var translateError = function translateError(message, amqpError) {
   var error;
 
-  if (amqpError.constructor.name === 'AMQPError') {
-    switch (amqpError.condition.contents) {
+  if (amqpError.condition) {
+    switch (amqpError.condition) {
       case 'amqp:not-found':
         /*Codes_SRS_NODE_DEVICE_AMQP_COMMON_ERRORS_16_006: [`translateError` shall return an `DeviceNotFoundError` if the AMQP error condition is `amqp:not-found`.]*/
         error = new errors.DeviceNotFoundError(message);
@@ -46,6 +46,9 @@ var translateError = function translateError(message, amqpError) {
   }
   else if (amqpError instanceof amqp10.Errors.AuthenticationError) {
     error = new errors.UnauthorizedError(message);
+  } else {
+    /*Codes_SRS_NODE_DEVICE_AMQP_COMMON_ERRORS_16_002: [If the AMQP error code is unknown, `translateError` should return a generic Javascript `Error` object.]*/
+    error = new Error(message);
   }
 
   /*Codes_SRS_NODE_DEVICE_AMQP_COMMON_ERRORS_16_001: [Any error object returned by `translateError` shall inherit from the generic `Error` Javascript object and have 2 properties:

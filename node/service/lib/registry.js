@@ -9,6 +9,7 @@ var ConnectionString = require('./connection_string.js');
 var DefaultTransport = require('./registry_http.js');
 var Device = require('./device.js');
 var endpoint = require('azure-iot-common').endpoint;
+
 var SharedAccessSignature = require('./shared_access_signature.js');
 
 /**
@@ -21,7 +22,7 @@ var SharedAccessSignature = require('./shared_access_signature.js');
  *                  to create a Registry object.
  * @param {Object}  transport   An object that implements the interface
  *                              expected of a transport object. See the file
- *                              **node/service/lib/devdoc/http_requirements.docm**
+ *                              **node/service/devdoc/http_requirements.docm**
  *                              for information on what the transport object
  *                              should look like. The
  *                              {@link module:azure-iothub.Http|Http} class is

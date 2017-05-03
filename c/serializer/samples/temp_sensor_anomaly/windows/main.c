@@ -2,13 +2,14 @@
 // Licensed under the MIT license. See LICENSE file in the project root for full license information.
 
 #include <stdlib.h>
+#include "azure_c_shared_utility/threadapi.h"
+#include "azure_c_shared_utility/platform.h"
 #include "iothubtransporthttp.h"
 #include "schemalib.h"
 #include "serializer.h"
 #include "schemaserializer.h"
-#include "threadapi.h"
+#include "iothub_client_options.h"
 #include "iothub_client_ll.h"
-#include "platform.h"
 
 static const char* connectionString = "[device connection string]";
 static const char* deviceId = "[deviceName]"; /*must match the one on connectionString*/
@@ -42,12 +43,14 @@ END_NAMESPACE(Contoso);
 
 EXECUTE_COMMAND_RESULT AlarmAnomaly(FrdmDevice* frdmDevice, ascii_char_ptr SensorId)
 {
+    (void)frdmDevice;
     (void)printf("Anomaly ALARM from: %s\r\n", SensorId);
     return EXECUTE_COMMAND_SUCCESS;
 }
 
 EXECUTE_COMMAND_RESULT AlarmThreshold(FrdmDevice* frdmDevice, ascii_char_ptr SensorId)
 {
+    (void)frdmDevice;
     (void)printf("Threshold ALARM from: %s\r\n", SensorId);
     return EXECUTE_COMMAND_SUCCESS;
 }
@@ -143,7 +146,7 @@ int main(void)
                 // is 25 minutes. For more information, see:
                 // https://azure.microsoft.com/documentation/articles/iot-hub-devguide/#messaging
                 unsigned int minimumPollingTime = 9;
-                if (IoTHubClient_LL_SetOption(iotHubClientHandle, "MinimumPollingTime", &minimumPollingTime) != IOTHUB_CLIENT_OK)
+                if (IoTHubClient_LL_SetOption(iotHubClientHandle, OPTION_MIN_POLLING_TIME, &minimumPollingTime) != IOTHUB_CLIENT_OK)
                 {
                     printf("failure to set option \"MinimumPollingTime\"\r\n");
                 }

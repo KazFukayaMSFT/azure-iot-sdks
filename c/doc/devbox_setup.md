@@ -87,7 +87,7 @@ The following instructions outline how you can build the libraries in Windows:
 
 > Note: To enable support to AMQP over WebSockets, 
   1. Install [OpenSSL 1.0.1 (x86)](https://github.com/openssl/openssl) (tip: build the dll prior to running the following steps); 
-  2. Additionally to instructions on **step 1 above**, create the environment variable **OPENSSL_ROOT_DIR=C:\\OpenSSL** 
+  2. Additionally to instructions on **step 1 above**, create the environment variable **OPENSSL_ROOT_DIR=C:\\OpenSSL** and  **OpenSSLDir=C:\\OpenSSL**
   3. Run the **build\_client.cmd** script with the option ```--use-websockets```.
 
 <a name="linux"/>
@@ -115,14 +115,14 @@ This script uses **cmake** to make a folder called "cmake" in your home director
 
 > Note: Every time you run `build.sh`, it deletes and then recreates the "cmake" folder in your home directory.
 
-> Note: You will not be able to run the samples until you configure them with a valid IoT Hub device connection string. For more information, see [Run sample on Linux](run_sample_on_desktop_linux.md).
+> Note: You will not be able to run the samples until you configure them with a valid IoT Hub device connection string. For more information, see [Run sample on Linux](../../doc/get_started/linux-desktop-c.md).
 
 <a name="windowsce"/>
 ## Set up a Windows Embedded Compact 2013 development environment
 
-- Install [Visual Studio 2013][visual-studio]. You can use the free Community Edition if you meet the licensing requirements.
+- Install [Visual Studio 2015][visual-studio]. You can use the free Community Edition if you meet the licensing requirements.
 Be sure to include Visual C++ and NuGet Package Manager.
-- Install [Application Builder for Windows Embedded Compact 2013][application-builder]
+- Install [Application Builder for Windows Embedded Compact 2013][application-builder] for Visual Studio 2015
 - Install [Toradex Windows Embedded Compact 2013 SDK][toradex-CE8-sdk] or your own SDK.
 - Install [git](http://www.git-scm.com) making sure git.exe can be run from a command line.
 
@@ -139,19 +139,19 @@ with a reference to the name of the SDK and the processor architecture (arm/x86)
 
 You can build the Windows samples to verify that your environment is set up correctly.
 
-1. Open a Visual Studio 2013 Developer command prompt.
+1. Open a Visual Studio 2015 Developer command prompt.
 
 2. Navigate to the **c\\build_all\\windowsce** folder in your local copy of the repository.
 
 3. Run the following command:
 
 ```
-build.cmd --skip-e2e-tests
+build.cmd
 ```
 
-This script uses cmake to make a folder called "cmake_ce8" in your home directory and generates in that folder a Visual Studio solution called azure_iot_sdks.sln. The script will then proceed to build the solution and run tests.
+This script uses cmake to make a folder called "cmake_ce8" in your home directory and generates in that folder a Visual Studio solution called azure_iot_sdks.sln. The script will then proceed to build the HTTP sample.
 
-> Note: you will not be able to run the samples until you configure them with a valid IoT hub device connection string. For more information, see [running a C sample application on Windows Embedded Compact 2013 on a Toradex module](run_sample_on_toradex_wec2013.md).
+> Note: you will not be able to run the samples until you configure them with a valid IoT hub device connection string. For more information, see [running a C sample application on Windows Embedded Compact 2013 on a Toradex module](../../doc/get_started/wince2013-toradex-module-c.md).
 
 To view the projects and examine the source code, open the **azure_iot_sdks.sln** solution files in Visual Studio.
 
@@ -166,4 +166,4 @@ This repository contains various C sample applications that illustrate how to us
 [readme]: ../readme.md
 [device-explorer]: ../../tools/DeviceExplorer/readme.md
 [toradex-CE8-sdk]:http://docs.toradex.com/102578
-[application-builder]:http://www.microsoft.com/en-us/download/details.aspx?id=38819
+[application-builder]:http://www.microsoft.com/download/details.aspx?id=38819

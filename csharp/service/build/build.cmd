@@ -67,7 +67,7 @@ rem ----------------------------------------------------------------------------
 rem -- build csharp iot client
 rem -----------------------------------------------------------------------------
 
-call nuget restore "%build-root%\csharp\service\iothub_csharp_serviceclient.sln"
+call nuget restore -config "%current-path%\NuGet.Config" "%build-root%\csharp\service\iothub_csharp_serviceclient.sln"
 if %build-clean%==1 (
     call :clean-a-solution "%build-root%\csharp\service\iothub_csharp_serviceclient.sln" %build-config% %build-platform%
     if not !errorlevel!==0 exit /b !errorlevel!
@@ -88,7 +88,7 @@ rem ----------------------------------------------------------------------------
 
 :clean-a-solution
 call :_run-msbuild "Clean" %1 %2 %3
-echo %errorlevel%
+echo !ERRORLEVEL!
 goto :eof
 
 :build-a-solution
@@ -117,5 +117,5 @@ if "%~3" neq "" set build-config=%~3
 if "%~4" neq "" set build-platform=%~4
 
 msbuild /m %build-target% "/p:Configuration=%build-config%;Platform=%build-platform%" %2
-if not %errorlevel%==0 exit /b %errorlevel%
+if not !ERRORLEVEL!==0 exit /b !ERRORLEVEL!
 goto :eof

@@ -10,7 +10,7 @@ namespace Microsoft.Azure.Devices.Client.Samples
     class Program
     {
 
-        
+
         // String containing Hostname, Device Id & Device Key in one of the following formats:
         //  "HostName=<iothub_host_name>;DeviceId=<device_id>;SharedAccessKey=<device_key>"
         //  "HostName=<iothub_host_name>;CredentialType=SharedAccessSignature;DeviceId=<device_id>;SharedAccessSignature=SharedAccessSignature sr=<iot_host>/devices/<device_id>&sig=<token>&se=<expiry_time>";
@@ -55,7 +55,7 @@ namespace Microsoft.Azure.Devices.Client.Samples
             for (int count = 0; count < MESSAGE_COUNT; count++)
             {
                 dataBuffer = Guid.NewGuid().ToString();
-                Message eventMessage = new Message(Encoding.UTF8.GetBytes(dataBuffer));
+                var eventMessage = new Message(Encoding.UTF8.GetBytes(dataBuffer));
                 Console.WriteLine("\t{0}> Sending message: {1}, Data: [{2}]", DateTime.Now.ToLocalTime(), count, dataBuffer);
 
                 await deviceClient.SendEventAsync(eventMessage);
@@ -65,19 +65,34 @@ namespace Microsoft.Azure.Devices.Client.Samples
         static async Task ReceiveCommands(DeviceClient deviceClient)
         {
             Console.WriteLine("\nDevice waiting for commands from IoTHub...\n");
-            Message receivedMessage;
-            string messageData;
+            Message receivedMessage = null;
 
             while (true)
             {
-                receivedMessage = await deviceClient.ReceiveAsync(TimeSpan.FromSeconds(1));
-                
-                if (receivedMessage != null)
+                try
                 {
-                    messageData = Encoding.ASCII.GetString(receivedMessage.GetBytes());
-                    Console.WriteLine("\t{0}> Received message: {1}", DateTime.Now.ToLocalTime(), messageData);
+                    receivedMessage = await deviceClient.ReceiveAsync(TimeSpan.FromSeconds(1));
 
-                    await deviceClient.CompleteAsync(receivedMessage);
+                    if (receivedMessage != null)
+                    {
+                        string messageData = Encoding.ASCII.GetString(receivedMessage.GetBytes());
+                        Console.WriteLine("\t{0}> Received message: {1}", DateTime.Now.ToLocalTime(), messageData);
+
+                        int propCount = 0;
+                        foreach (var prop in receivedMessage.Properties)
+                        {
+                            Console.WriteLine("\t\tProperty[{0}> Key={1} : Value={2}", propCount++, prop.Key, prop.Value);
+                        }
+
+                        await deviceClient.CompleteAsync(receivedMessage);
+                    }
+                }
+                finally
+                {
+                    if (receivedMessage != null)
+                    {
+                        receivedMessage.Dispose();
+                    }
                 }
             }
         }

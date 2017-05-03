@@ -17,11 +17,15 @@ namespace Microsoft.Azure.Devices.Client.Transport
     using Microsoft.Azure.Devices.Client.Extensions;
     using Newtonsoft.Json;
 
-    sealed class HttpTransportHandler : TransportHandlerBase
+#if !WINDOWS_UWP && !PCL
+    using Microsoft.WindowsAzure.Storage.Blob;
+#endif
+
+    sealed class HttpTransportHandler : DefaultDelegatingHandler
     {
+        readonly Http1TransportSettings transportSettings;
         static readonly TimeSpan DefaultOperationTimeout = TimeSpan.FromSeconds(60);
-        static readonly TimeSpan DefaultReceiveTimeoutInSeconds = TimeSpan.FromSeconds(0);
-        static readonly IDictionary<string, string> MapMessageProperties2HttpHeaders = new Dictionary<string, string>()
+        static readonly IDictionary<string, string> MapMessageProperties2HttpHeaders = new Dictionary<string, string>
             {
                 { MessageSystemPropertyNames.Ack, CustomHeaderConstants.Ack },
                 { MessageSystemPropertyNames.CorrelationId, CustomHeaderConstants.CorrelationId },
@@ -35,8 +39,7 @@ namespace Microsoft.Azure.Devices.Client.Transport
         readonly IHttpClientHelper httpClientHelper;
         readonly string deviceId;
 
-        readonly Http1TransportSettings transportSettings;
-
+#if WINDOWS_UWP || PCL
         internal HttpTransportHandler(IotHubConnectionString iotHubConnectionString)
         {
             this.deviceId = iotHubConnectionString.DeviceId;
@@ -46,15 +49,41 @@ namespace Microsoft.Azure.Devices.Client.Transport
                 ExceptionHandlingHelper.GetDefaultErrorMapping(),
                 DefaultOperationTimeout,
                 null);
-            this.DefaultReceiveTimeout = DefaultReceiveTimeoutInSeconds;
         }
+#else
+        internal HttpTransportHandler(IotHubConnectionString iotHubConnectionString)
+            : this(iotHubConnectionString, new Http1TransportSettings())
+        {
+        }
+#endif
 
+#if WINDOWS_UWP || PCL
         internal HttpTransportHandler(IotHubConnectionString iotHubConnectionString, Http1TransportSettings transportSettings)
-            :this(iotHubConnectionString)
+            : this(iotHubConnectionString)
         {
             this.transportSettings = transportSettings;
+            this.deviceId = iotHubConnectionString.DeviceId;
+            this.httpClientHelper = new HttpClientHelper(
+                iotHubConnectionString.HttpsEndpoint,
+                iotHubConnectionString,
+                ExceptionHandlingHelper.GetDefaultErrorMapping(),
+                DefaultOperationTimeout,
+                null);
         }
-
+#else
+        internal HttpTransportHandler(IotHubConnectionString iotHubConnectionString, Http1TransportSettings transportSettings)
+        {
+            this.transportSettings = transportSettings;
+            this.deviceId = iotHubConnectionString.DeviceId;
+            this.httpClientHelper = new HttpClientHelper(
+                iotHubConnectionString.HttpsEndpoint,
+                iotHubConnectionString,
+                ExceptionHandlingHelper.GetDefaultErrorMapping(),
+                DefaultOperationTimeout,
+                null,
+                this.transportSettings.ClientCertificate);
+        }
+#endif
         /// <summary>
         /// Create a DeviceClient from individual parameters
         /// </summary>
@@ -65,15 +94,15 @@ namespace Microsoft.Azure.Devices.Client.Transport
         {
             if (hostname == null)
             {
-                throw new ArgumentNullException("hostname");
+                throw new ArgumentNullException(nameof(hostname));
             }
 
             if (authMethod == null)
             {
-                throw new ArgumentNullException("authMethod");
+                throw new ArgumentNullException(nameof(authMethod));
             }
 
-            var connectionStringBuilder = IotHubConnectionStringBuilder.Create(hostname, authMethod);
+            IotHubConnectionStringBuilder connectionStringBuilder = IotHubConnectionStringBuilder.Create(hostname, authMethod);
             return CreateFromConnectionString(connectionStringBuilder.ToString());
         }
 
@@ -86,32 +115,30 @@ namespace Microsoft.Azure.Devices.Client.Transport
         {
             if (connectionString == null)
             {
-                throw new ArgumentNullException("connectionString");
+                throw new ArgumentNullException(nameof(connectionString));
             }
 
-            var iotHubConnectionString = IotHubConnectionString.Parse(connectionString);
+            IotHubConnectionString iotHubConnectionString = IotHubConnectionString.Parse(connectionString);
             return new HttpTransportHandler(iotHubConnectionString);
         }
 
-        protected override TimeSpan DefaultReceiveTimeout { get; set; }
-
-        protected override Task OnOpenAsync(bool explicitOpen)
+        public override Task OpenAsync(bool explicitOpen)
         {
             return TaskHelpers.CompletedTask;
         }
 
-        protected override Task OnCloseAsync()
+        public override Task CloseAsync()
         {
             return TaskHelpers.CompletedTask;
         }
 
-        protected override Task OnSendEventAsync(Message message)
+        public override Task SendEventAsync(Message message)
         {
             if (message == null)
             {
                 throw Fx.Exception.ArgumentNull("message");
             }
-            
+
             var customHeaders = new Dictionary<string, string>(message.SystemProperties.Count + message.Properties.Count);
             foreach (var property in message.SystemProperties)
             {
@@ -124,14 +151,14 @@ namespace Microsoft.Azure.Devices.Client.Transport
             }
 
             return this.httpClientHelper.PostAsync<byte[]>(
-                GetRequestUri(this.deviceId, CommonConstants.DeviceEventPathTemplate, null), 
-                message.GetBytes(), 
-                ExceptionHandlingHelper.GetDefaultErrorMapping(), 
+                GetRequestUri(this.deviceId, CommonConstants.DeviceEventPathTemplate, null),
+                message.GetBytes(),
+                ExceptionHandlingHelper.GetDefaultErrorMapping(),
                 customHeaders,
                 CancellationToken.None);
         }
 
-        protected override Task OnSendEventAsync(IEnumerable<Message> messages)
+        public override Task SendEventAsync(IEnumerable<Message> messages)
         {
             if (messages == null)
             {
@@ -147,6 +174,21 @@ namespace Microsoft.Azure.Devices.Client.Transport
                 ExceptionHandlingHelper.GetDefaultErrorMapping(),
                 customHeaders,
                 CancellationToken.None);
+        }
+
+        protected override void Dispose(bool disposing)
+        {
+            try
+            {
+                if (disposing)
+                {
+                    this.httpClientHelper?.Dispose();
+                }
+            }
+            finally
+            {
+                base.Dispose(disposing);
+            }
         }
 
         internal Task SendEventAsync(IEnumerable<string> messages)
@@ -174,7 +216,74 @@ namespace Microsoft.Azure.Devices.Client.Transport
                 CancellationToken.None);
         }
 
-        protected async override Task<Message> OnReceiveAsync(TimeSpan timeout)
+#if !WINDOWS_UWP && !PCL
+        internal async Task UploadToBlobAsync(String blobName, System.IO.Stream source)
+        {
+            var fileUploadRequest = new FileUploadRequest()
+            {
+                BlobName = blobName
+            };
+
+            var fileUploadResponse = await this.httpClientHelper.PostAsync<FileUploadRequest, FileUploadResponse>(
+            GetRequestUri(this.deviceId, CommonConstants.BlobUploadPathTemplate, null),
+            fileUploadRequest,
+            ExceptionHandlingHelper.GetDefaultErrorMapping(),
+            null,
+            CancellationToken.None);
+
+            string putString = String.Format("https://{0}/{1}/{2}{3}",
+                fileUploadResponse.HostName,
+                fileUploadResponse.ContainerName,
+                fileUploadResponse.BlobName,
+                fileUploadResponse.SasToken);
+
+            var notification = new FileUploadNotificationResponse();
+
+            try
+            {
+                // 2. Use SAS URI to send data to Azure Storage Blob (PUT)
+                CloudBlockBlob blob = new CloudBlockBlob(new Uri(putString));
+                var uploadTask = blob.UploadFromStreamAsync(source);
+                await uploadTask;
+
+                notification.CorrelationId = fileUploadResponse.CorrelationId;
+                notification.IsSuccess = uploadTask.IsCompleted;
+                notification.StatusCode = uploadTask.IsCompleted ? 0 : -1;
+                notification.StatusDescription = uploadTask.IsCompleted ? null : "Failed to upload to storage.";
+
+                // 3. POST to IoTHub with upload status
+                await this.httpClientHelper.PostAsync<FileUploadNotificationResponse>(
+                    GetRequestUri(this.deviceId, CommonConstants.BlobUploadStatusPathTemplate + "notifications", null),
+                    notification,
+                    ExceptionHandlingHelper.GetDefaultErrorMapping(),
+                    null,
+                    CancellationToken.None);
+            }
+            catch (Exception ex)
+            {
+                // 3. POST to IoTHub with upload status
+                notification.IsSuccess = false;
+                notification.StatusCode = -1;
+                notification.StatusDescription = ex.Message;
+
+                await this.httpClientHelper.PostAsync<FileUploadNotificationResponse>(
+                    GetRequestUri(this.deviceId, CommonConstants.BlobUploadStatusPathTemplate + "notifications/" + fileUploadResponse.CorrelationId, null),
+                    notification,
+                    ExceptionHandlingHelper.GetDefaultErrorMapping(),
+                    null,
+                    CancellationToken.None);
+
+                throw ex;
+            }
+        }
+#endif
+
+        public override Task<Message> ReceiveAsync()
+        {
+            return this.ReceiveAsync(TimeSpan.Zero);
+        }
+
+        public override async Task<Message> ReceiveAsync(TimeSpan timeout)
         {
             // Long-polling is not supported
             if (!TimeSpan.Zero.Equals(timeout))
@@ -272,7 +381,7 @@ namespace Microsoft.Azure.Devices.Client.Transport
             return message;
         }
 
-        protected override Task OnCompleteAsync(string lockToken)
+        public override Task CompleteAsync(string lockToken)
         {
             var customHeaders = PrepareCustomHeaders(
                 CommonConstants.DeviceBoundPathCompleteTemplate.FormatInvariant(this.deviceId, lockToken),
@@ -289,7 +398,7 @@ namespace Microsoft.Azure.Devices.Client.Transport
                 CancellationToken.None);
         }
 
-        protected override Task OnAbandonAsync(string lockToken)
+        public override Task AbandonAsync(string lockToken)
         {
             var customHeaders = PrepareCustomHeaders(
                 CommonConstants.DeviceBoundPathAbandonTemplate.FormatInvariant(this.deviceId, lockToken),
@@ -307,7 +416,7 @@ namespace Microsoft.Azure.Devices.Client.Transport
                 CancellationToken.None);
         }
 
-        protected override Task OnRejectAsync(string lockToken)
+        public override Task RejectAsync(string lockToken)
         {
             var customHeaders = PrepareCustomHeaders(
                 CommonConstants.DeviceBoundPathRejectTemplate.FormatInvariant(this.deviceId, lockToken),
@@ -327,7 +436,7 @@ namespace Microsoft.Azure.Devices.Client.Transport
         static IDictionary<string, string> PrepareCustomHeaders(string toHeader, string messageId, string operation)
         {
             var customHeaders = new Dictionary<string, string>
-            {   
+            {
                 { CustomHeaderConstants.To, toHeader },
                 { CustomHeaderConstants.Operation, operation },
             };
@@ -411,7 +520,7 @@ namespace Microsoft.Azure.Devices.Client.Transport
                 writer.WriteEndArray();
                 // ]
 
-                return sw.ToString();                
+                return sw.ToString();
             }
         }
 
@@ -476,7 +585,7 @@ namespace Microsoft.Azure.Devices.Client.Transport
 
                     foreach (var property in message.Item2)
                     {
-                        writer.WritePropertyName(property.Key); 
+                        writer.WritePropertyName(property.Key);
                         writer.WriteValue(property.Value);
                     }
 
